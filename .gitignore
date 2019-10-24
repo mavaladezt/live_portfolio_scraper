@@ -2,3 +2,4 @@
 *.db
 Download
 .ipynb_checkpoints
+*.csv
