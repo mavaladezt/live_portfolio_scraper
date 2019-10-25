@@ -108,7 +108,7 @@ def scrape(stocks,times,db):
             execute_query(db,query_list)
             sleep(1)
     pass
-scrape(stocks_to_track,10,'stock.db')
+
 
 #LIVE GRAPH =========================================================================================================
 
@@ -144,36 +144,29 @@ db='stock.db'
 with open('symbols.csv','r') as f:
     stocks = f.read().splitlines()
     stocks = stocks[1:]
-start = '2019-10-25'
-end = '2019-12-31'
-stocks_to_track=['AAPL','AMZN','BA','FORD']
+#start = '2019-01-01'
+#end = '2019-12-31'
 
+stocks_to_track=['AAPL','AMZN','MSFT','KLAC']
+
+#weights = [0.5,0.5]
 #download_stocks(stocks, start, end)
 #history_to_sql()
-data=process_stocks(stocks_to_track, '2019-10-01', '2019-10-25')
+
+
+data=process_stocks(stocks, '2019-01-01', '2019-10-24')
 
 
 
-
+scrape(stocks_to_track,10,'stock.db')
 portfolio = ['AAPL']
-weights = [0.5,0.5]
+
 graph(['AAPL'])
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
+data = data.iloc[:,(~data.isna().any()).values]  
 
 
 
@@ -183,20 +176,68 @@ graph(['AAPL'])
 #stock_returns = (data - data.shift(1)) / data
 #stock_returns = stock_returns.iloc[1:,]
 #covMatrix = np.cov(stock_returns,rowvar=False,ddof=0)
+
 returns_daily = data.pct_change()
 returns_annual = (returns_daily.mean()+1) ** 250 -1
+sd = (returns_daily.std())
+
+riskFreeRate = 1.75/100 #10 year treasury bond
+
+sharpe = (returns_daily.mean()-(riskFreeRate)*(1/250))/(returns_daily.std())
+
 
 #http://onlyvix.blogspot.com/2010/08/simple-trick-to-convert-volatility.html
 cov_daily = returns_daily.cov()
 #cov_annual = cov_daily * np.sqrt(250)
 cov_annual = cov_daily * 250
 
+summary=pd.DataFrame()
+
+summary['sd']=sd
+summary['sharpe']=sharpe
+#summary['daily_return']=returns_daily
+summary['daily_return']=returns_daily.mean()
+summary.sort_values(by=['sharpe'], ascending=False, inplace=True)
+summary.to_csv('summary.csv')
 
 
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+stocks=['MSFT','MAA','KLAC','AAPL']
+data[stocks]
+returns_daily = data[stocks].pct_change()
+returns_annual = (returns_daily.mean()+1) ** 250 -1
+
+cov_daily = returns_daily.cov()
+#cov_annual = cov_daily * np.sqrt(250)
+cov_annual = cov_daily * 250
 
 
 
@@ -269,6 +310,54 @@ plt.show()
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def graph(portfolio,weights):
     weights=np.array(weights)
     plt.ion()
@@ -284,3 +373,32 @@ def graph(portfolio,weights):
             plt.plot(y)
             plt.draw()
             plt.pause(1)
+
+
+
+
+
+
+
+
+
+
+
+def evaluate_portfolio(weights, stock_returns, covMatrix, riskFreeRate=0.01):
+#In finance, the Sharpe ratio measures the performance of an investment
+# compared to a risk-free asset, after adjusting for its risk. It is defined
+# as the difference between the returns of the investment and the risk-free
+# return, divided by the standard deviation of the investment. Wikipedia
+#A negative Sharpe ratio means that the performance of a manager or portfolio
+# is below the risk-free rate. For financial assets, negative Sharpe ratios
+# won't persist for indefinite periods of time.
+    portReturn = np.sum( stock_returns*weights )
+#    portStdDev = np.sqrt(np.dot(weights.T, np.dot(covMatrix, weights)))
+#    portStdDev = np.sqrt((weights.T@(covMatrix@weights)))
+    portStdDev = (1/np.sum(np.linalg.inv(covMatrix)))**.5
+#    sharpe_ratio = (portReturn-riskFreeRate)/portStdDev
+    return portReturn, portStdDev
+
+
+riskFreeRate = 1.75/100 #10 year treasury bond
+
