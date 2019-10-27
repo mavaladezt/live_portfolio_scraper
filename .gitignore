@@ -5,3 +5,4 @@ Download
 *.csv
 old
 *.key
+__pycache__
