@@ -4,3 +4,4 @@ Download
 .ipynb_checkpoints
 *.csv
 old
+*.key

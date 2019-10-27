@@ -1,6 +1,5 @@
 import numpy as np
-import pandas as pd 
-#import scipy.optimize as sco
+import pandas as pd
 import pandas_datareader.data as web
 from time import sleep
 import wget
@@ -13,11 +12,16 @@ import matplotlib.pyplot as plt
 import datetime
 import csv
 
-
-#==========REVIEWED CODE =============================================================
-
+#FUNCTIONS=====================================================================
 
 def download_stocks(stocks, start, end):
+    '''
+    Function that downloads stocks from yahoo finance.
+    Inputs:
+      stocks: list of quote or symbol (stock abbreviation)
+      start: starting date in string format like: 'YYYY-MM-DD'
+      end: ending date in string format like: 'YYYY-MM-DD'
+    '''
     data = pd.DataFrame()
     df = pd.DataFrame()
     i = 1
@@ -32,14 +36,11 @@ def download_stocks(stocks, start, end):
             df = df.append(temp)
         i += 1
         sleep(0.1)
-    df.to_csv('df.csv', encoding = 'utf-8') 
-#    return df
+    df.to_csv('df.csv', encoding = 'utf-8')
     pass
 
-
 def execute_query(db,queries):
-    try:
-        
+    try:        
         conn = sqlite3.connect(db)
         print("Connected to SQLITE Database stocks.db")
     except:
@@ -59,7 +60,6 @@ def get_query(db,query):
     conn.close()
     return result
 
-
 def history_to_sql(db):
     with open('df.csv') as f: 
         reader = csv.reader(f)
@@ -75,12 +75,9 @@ def history_to_sql(db):
     execute_query(db,queries)
     pass
 
-
 def scrape(stocks,times,db):
     headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'}
-
     for i in range(times):
-
         for stock in stocks:
             t = datetime.datetime.now()
             t_string = str(t.year) + "-" + str(t.month) + "-" + str(t.day) + " " + str(t.hour) + ":" + str(t.minute)+ ":" + str(t.second)
@@ -89,7 +86,6 @@ def scrape(stocks,times,db):
             text = BeautifulSoup(response.text, 'html.parser')
             TitleTags = text.find_all('span',{'class':"Trsdu(0.3s) Fw(b) Fz(36px) Mb(-4px) D(ib)"})
             x = float((TitleTags[0].string).replace(",",""))
-
             try:
                 recommendation = text.find_all('span',{'class':['Fz(14px) Fw(b) C($positiveColor)','Fz(14px) Fw(b) C($primaryColor)','Fz(14px) Fw(b) C($c-fuji-orange-a)']})
                 recommendation = str(recommendation[0].string)
@@ -113,9 +109,9 @@ def scrape(stocks,times,db):
 #LIVE GRAPH =========================================================================================================
 
 
-def graph(stock):
+def graph(stock,n):
     plt.ion()
-    n=20
+#    n=20
 #    if len(port)==1:
     for i in range(n):
         df = get_query(db,"Select * from live where symbol in ('" + str(portfolio[0]) + "');")
@@ -138,6 +134,93 @@ def process_stocks(stocks_to_track, start, end):
     return data[stocks_to_track]
 
 
+def montecarlo(stocks, start, end, riskFreeRate, n=50000, graph=True):
+    data = process_stocks(stocks, start, end)
+    data = data.iloc[:,(~data.isna().any()).values]
+    stocks = list(data.columns)
+    #data.to_csv('summary.csv')
+    returns_daily = data.pct_change()
+    returns_annual = (returns_daily.mean()+1) ** 250 -1
+    sd = returns_daily.std()
+    sharpe = (returns_daily-((1+riskFreeRate/100)**(1/250)-1)).mean()/(returns_daily-((1+riskFreeRate/100)**(1/250)-1)).std()
+    #http://onlyvix.blogspot.com/2010/08/simple-trick-to-convert-volatility.html
+    cov_daily = returns_daily.cov()
+    cov_annual = cov_daily * np.sqrt(250)
+    #cov_annual = cov_daily * 250
+    summary=pd.DataFrame()
+    summary['sd']=sd
+    summary['sharpe']=sharpe
+    summary['daily_return']=returns_daily.mean()
+    summary.to_csv('summary.csv')
+
+    # empty lists to store returns, volatility and weights of imiginary portfolios
+    port_returns = []
+    port_volatility = []
+    stock_weights = []
+    sharpe_ratio = []
+
+    # set the number of combinations for imaginary portfolios
+    num_assets = data.shape[1]
+#    num_portfolios = 50000
+
+    # populate the empty lists with each portfolios returns,risk and weights
+    for single_portfolio in range(n):
+        weights = np.random.random(num_assets)
+        weights /= np.sum(weights)
+        returns = np.dot(weights, returns_annual)
+        volatility = np.sqrt(np.dot(weights.T, np.dot(cov_annual, weights)))
+        sharpe = returns / volatility
+        sharpe_ratio.append(sharpe)
+        port_returns.append(returns)
+        port_volatility.append(volatility)
+        stock_weights.append(weights)
+
+    # a dictionary for Returns and Risk values of each portfolio
+    portfolio = {'Returns': port_returns,
+                 'Volatility': port_volatility,
+                 'Sharpe Ratio': sharpe_ratio}
+
+    # extend original dictionary to accomodate each ticker and weight in the portfolio
+    for counter,symbol in enumerate(stocks):
+        portfolio[symbol+' Weight'] = [Weight[counter] for Weight in stock_weights]
+
+    # make a nice dataframe of the extended dictionary
+    df = pd.DataFrame(portfolio)
+
+    # get better labels for desired arrangement of columns
+    column_order = ['Returns', 'Volatility', 'Sharpe Ratio'] + [stock+' Weight' for stock in stocks]
+
+    # reorder dataframe columns
+    df = df[column_order]
+
+    # plot the efficient frontier with a scatter plot
+    #plt.style.use('seaborn')
+    #df.plot.scatter(x='Volatility', y='Returns', figsize=(10, 8), grid=True)
+    #plt.xlabel('Volatility (Std. Deviation)')
+    #plt.ylabel('Expected Returns')
+    #plt.title('Efficient Frontier')
+    #plt.show()
+
+
+    min_volatility = df['Volatility'].min()
+    max_sharpe = df['Sharpe Ratio'].max()
+    sharpe_portfolio = df.loc[df['Sharpe Ratio'] == max_sharpe]
+    min_variance_port = df.loc[df['Volatility'] == min_volatility]
+
+    if graph:
+        plt.style.use('seaborn')
+        df.plot.scatter(x='Volatility', y='Returns', c='Sharpe Ratio',
+                        cmap=plt.cm.binary, edgecolors='black',figsize=(10, 8), grid=True)
+#        plt.scatter(x=sharpe_portfolio['Volatility'], y=sharpe_portfolio['Returns'], c='black', marker='D', s=100)
+#        plt.scatter(x=min_variance_port['Volatility'], y=min_variance_port['Returns'], c='black', marker='D', s=100 )
+#        plt.yticks(np.arange(-.3, 1.2, step=0.1))
+#        plt.xticks(np.arange(0.025, .13, step=0.025))
+        plt.xlabel('Volatility')
+        plt.ylabel('Expected Yearly Returns')
+        plt.title('Montecarlo Simulation of '+ str(n) + " Random Weights")
+        plt.show()
+
+    return sharpe_portfolio, min_variance_port
 
 
 
@@ -145,144 +228,34 @@ def process_stocks(stocks_to_track, start, end):
 
 
 
-#UPDATE DATABASE ==================================================================================
-#DOWNLOAD ALL STOCKS
+
+
+
+
 db='stock.db'
+start = '2015-01-01'
+end = '2019-12-31'
+riskFreeRate = 1.75/100 #10 year treasury bond
+
+#stocks = ['RSG','DUK','NEE','AEP','DTE']    #min volatility 2018-2019
+#stocks = ['NEE','BLL','CMG','KEYS','ETR']  #max sharpe
+#stocks = ['AMD','CMG','KEYS','EW','TDG']   #max return
+#stocks = ['NEE','BLL','CMG','KEYS','TDG','TDG'] #most repeated ones
+
+p_sharpe, min_variance_port= montecarlo(stocks, start, end, riskFreeRate, 50000, True)
+
+stocks = ['AMZN','MSFT','AAPL']  #EXAMPLE
+
+
 with open('symbols.csv','r') as f:
     stocks = f.read().splitlines()
     stocks = stocks[1:]
-data=process_stocks(stocks, '2018-01-01', '2019-12-31')
+data=process_stocks(stocks, start, end) #list of stocks, start and end dates
 data = data.iloc[:,(~data.isna().any()).values]
-#data.to_csv('summary.csv')
-
-returns_daily = data.pct_change()
-returns_annual = (returns_daily.mean()+1) ** 250 -1
+stocks=list(data.columns)
 
 
-sd = (returns_daily.std())
-
-riskFreeRate = 1.75/100 #10 year treasury bond
-
-#=(1+1.75/100)^(1/250)-1
-sharpe = (returns_daily-((1+riskFreeRate/100)**(1/250)-1)).mean()/(returns_daily-((1+riskFreeRate/100)**(1/250)-1)).std()
-
-
-#http://onlyvix.blogspot.com/2010/08/simple-trick-to-convert-volatility.html
-cov_daily = returns_daily.cov()
-#cov_annual = cov_daily * np.sqrt(250)
-cov_annual = cov_daily * 250
-
-summary=pd.DataFrame()
-
-summary['sd']=sd
-summary['sharpe']=sharpe
-#summary['daily_return']=returns_daily
-summary['daily_return']=returns_daily.mean()
-#summary.sort_values(by=['sharpe'], ascending=False, inplace=True)
-summary.to_csv('summary.csv')
-
-
-#SOLO PRENDER 6 STOCKS
-stocks=['CNP', 'F', 'WMT', 'GE', 'AMZN','AAPL']
-data=data[stocks]
-
-#SELECCIONAR LOS MEJORES STOCKS
-#stocks = summary.index[:].values
-#data = data[stocks]
-
-
-returns_daily = data.pct_change()
-returns_annual = (returns_daily.mean()+1) ** 250 -1
-
-cov_daily = returns_daily.cov()
-#cov_annual = cov_daily * np.sqrt(250)
-cov_annual = cov_daily * 250
-
-
-# empty lists to store returns, volatility and weights of imiginary portfolios
-port_returns = []
-port_volatility = []
-stock_weights = []
-sharpe_ratio = []
-
-# set the number of combinations for imaginary portfolios
-num_assets = data.shape[1]
-num_portfolios = 50000
-
-# populate the empty lists with each portfolios returns,risk and weights
-for single_portfolio in range(num_portfolios):
-    weights = np.random.random(num_assets)
-    weights /= np.sum(weights)
-    returns = np.dot(weights, returns_annual)
-    volatility = np.sqrt(np.dot(weights.T, np.dot(cov_annual, weights)))
-    sharpe = returns / volatility
-
-    sharpe_ratio.append(sharpe)
-    port_returns.append(returns)
-    port_volatility.append(volatility)
-    stock_weights.append(weights)
-
-
-
-# a dictionary for Returns and Risk values of each portfolio
-portfolio = {'Returns': port_returns,
-             'Volatility': port_volatility,
-             'Sharpe Ratio': sharpe_ratio}
-
-# extend original dictionary to accomodate each ticker and weight in the portfolio
-for counter,symbol in enumerate(stocks):
-    portfolio[symbol+' Weight'] = [Weight[counter] for Weight in stock_weights]
-
-# make a nice dataframe of the extended dictionary
-df = pd.DataFrame(portfolio)
-
-# get better labels for desired arrangement of columns
-column_order = ['Returns', 'Volatility', 'Sharpe Ratio'] + [stock+' Weight' for stock in stocks]
-
-# reorder dataframe columns
-df = df[column_order]
-
-# plot the efficient frontier with a scatter plot
-#plt.style.use('seaborn')
-#df.plot.scatter(x='Volatility', y='Returns', figsize=(10, 8), grid=True)
-#plt.xlabel('Volatility (Std. Deviation)')
-#plt.ylabel('Expected Returns')
-#plt.title('Efficient Frontier')
-#plt.show()
-
-
-min_volatility = df['Volatility'].min()
-max_sharpe = df['Sharpe Ratio'].max()
-sharpe_portfolio = df.loc[df['Sharpe Ratio'] == max_sharpe]
-min_variance_port = df.loc[df['Volatility'] == min_volatility]
-
-
-plt.style.use('seaborn')
-df.plot.scatter(x='Volatility', y='Returns', c='Sharpe Ratio',
-                cmap='RdYlGn', edgecolors='black',figsize=(10, 8), grid=True)
-
-plt.scatter(x=sharpe_portfolio['Volatility'], y=sharpe_portfolio['Returns'], c='red', marker='D', s=200)
-plt.scatter(x=min_variance_port['Volatility'], y=min_variance_port['Returns'], c='blue', marker='D', s=200 )
-
-plt.xlabel('Volatility (Std. Deviation)')
-plt.ylabel('Expected Returns')
-plt.title('Efficient Frontier')
-plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+p_sharpe2, min_variance_port2= montecarlo(stocks, start, end, riskFreeRate, 500000, False)
 
 
 
@@ -300,106 +273,4 @@ portfolio = ['AAPL']
 graph(['AAPL'])
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def graph(portfolio,weights):
-    weights=np.array(weights)
-    plt.ion()
-    n=20
-#    if len(portfolio)==1:
-        for i in range(n):
-            stocks = "', '".join(portfolio)
-            df = get_query(db,"Select * from live where symbol in ('" + str(one_stock[0]) + "');")
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
-            y = df.loc[df.symbol=='AAPL']['open']
-            plt.clf()
-            plt.plot(y)
-            plt.draw()
-            plt.pause(1)
-
-
-
-
-
-
-
-
-
-
-
-def evaluate_portfolio(weights, stock_returns, covMatrix, riskFreeRate=0.01):
-#In finance, the Sharpe ratio measures the performance of an investment
-# compared to a risk-free asset, after adjusting for its risk. It is defined
-# as the difference between the returns of the investment and the risk-free
-# return, divided by the standard deviation of the investment. Wikipedia
-#A negative Sharpe ratio means that the performance of a manager or portfolio
-# is below the risk-free rate. For financial assets, negative Sharpe ratios
-# won't persist for indefinite periods of time.
-    portReturn = np.sum( stock_returns*weights )
-#    portStdDev = np.sqrt(np.dot(weights.T, np.dot(covMatrix, weights)))
-#    portStdDev = np.sqrt((weights.T@(covMatrix@weights)))
-    portStdDev = (1/np.sum(np.linalg.inv(covMatrix)))**.5
-#    sharpe_ratio = (portReturn-riskFreeRate)/portStdDev
-    return portReturn, portStdDev
-
-
-riskFreeRate = 1.75/100 #10 year treasury bond
 
