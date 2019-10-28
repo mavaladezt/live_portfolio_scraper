@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import datetime
 import csv
 from pandas.plotting import register_matplotlib_converters
+from datetime import date
 register_matplotlib_converters()
 
 #FUNCTIONS=====================================================================
