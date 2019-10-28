@@ -78,3 +78,12 @@ insert into live values ('2019-10-25 14:41:10',112.12,'NEE');
 DELETE FROM live WHERE date='2019-10-25 14:41:09' and symbol='MSFT';
 
 stocks_to_track = ['BLL','CMG','AEP','DTE','TDG','EW','DUK','KEYS','ETR','RSG','AMD','NEE']
+
+select * from status where symbol = 'EW';
+
+delete from status where symbol='EW';
+insert into status values ('BUY','EW');
+
+
+delete from status where symbol='EW';
+insert into status values ('SELL','EW');

@@ -13,6 +13,8 @@ import datetime
 import csv
 from pandas.plotting import register_matplotlib_converters
 from datetime import date
+from termcolor import colored
+import os
 register_matplotlib_converters()
 
 #FUNCTIONS=====================================================================
@@ -29,16 +31,18 @@ def download_stocks(stocks, start, end):
     df = pd.DataFrame()
     i = 1
     for stock in stocks:
-        print( i ,"out of:",len(stocks)+1,"(",stock,")")
+        print( i ,"out of:",len(stocks),"(",stock,")")
         if i == 1:
             df = pd.DataFrame(web.DataReader(stock, data_source='yahoo', start=start, end=end))
             df['symbol']=stock
+            print('por aqui')
         else:
             temp = pd.DataFrame(web.DataReader(stock, data_source='yahoo', start=start, end=end))
             temp['symbol'] = stock
             df = df.append(temp)
+            print('por aqui tambien')
         i += 1
-        sleep(0.1)
+        sleep(0.01)
     df.to_csv('df.csv', encoding = 'utf-8')
     pass
 
@@ -63,19 +67,27 @@ def get_query(db,query):
     conn.close()
     return result
 
-def history_to_sql(db):
+def delete_history_sql(stocks, start, end):
+    query=[]
+    query.append("DELETE FROM history WHERE symbol in ("+ str(stocks)[1:-1] + ") and date between '" + start + "' and '" + end + "';")
+    print('Removing duplicates from database...')
+#    print(query)
+    execute_query('stock.db',query)
+    pass
+
+def history_to_sql():
     with open('df.csv') as f: 
         reader = csv.reader(f)
         lines = list(reader)    
-    queries_duplicates=[]
+#    queries_duplicates=[]
     queries=[]
     for line in lines[1:]:
-        queries_duplicates.append("DELETE FROM history WHERE date='" + line[0] + "' and symbol = '" + line[7] + "';")
+#        queries_duplicates.append("DELETE FROM history WHERE date='" + line[0] + "' and symbol = '" + line[7] + "';")
         queries.append("INSERT INTO history VALUES ('" + line[0] + "',"   + line[1] + ","   + line[2] + "," + line[3] + "," + line[4] + "," + line[5] + "," + line[6] + ",'" + line[7] + "');")
-    print('Removing duplicates from database...')
-    execute_query(db,queries_duplicates)
+#    print('Removing duplicates from database...')
+#    execute_query(db,queries_duplicates)
     print('Inserting items to database...')
-    execute_query(db,queries)
+    execute_query('stock.db',queries)
     pass
 
 def scrape(stocks,times,db='stock.db'):
@@ -237,10 +249,122 @@ def montecarlo(stocks, start, end, riskFreeRate, n=50000, graph=True):
 
 
 
+def monitor(stocks_to_track,my_portfolio,my_weights,n):
+    for i in range(n):
+        current_year = date.today().year
+        query = "select date from history where date>= '" + str(current_year) + "-01-01' order by date limit 1;"
+        first_day_year = get_query('stock.db',query)
+        first_day_year=first_day_year.iloc[0,0]
+
+        query = "select max(date) from history;"
+        latest_date = get_query('stock.db',query)
+        latest_date = latest_date.iloc[0,0]
+
+        query = "select distinct(date) from history where date < '" + str(latest_date) + "' order by date desc limit 1 offset 20;"
+        month_date = get_query('stock.db',query)
+        month_date = month_date.iloc[0,0]
+
+        query = 'select symbol, volume, adjclose as opening from history where symbol in ('+str(stocks_to_track)[1:-1]+') and date = (select max(date) from history);'
+        summary = get_query('stock.db',query)
+        summary = summary.set_index('symbol')
+
+        query = "select symbol, adjclose as start_of_year from history where symbol in ("+str(stocks_to_track)[1:-1]+") and date = '"+str(first_day_year)+"';"
+        temp1 = get_query('stock.db',query)
+        temp1 = temp1.set_index('symbol')
+
+        query = "select symbol, adjclose as month_ago from history where symbol in ("+str(stocks_to_track)[1:-1]+") and date = '"+str(month_date)+"';"
+        temp2 = get_query('stock.db',query)
+        temp2 = temp2.set_index('symbol')
+
+        query = "select symbol, recommendation from status where symbol in ("+str(stocks_to_track)[1:-1]+");"
+        temp3 = get_query('stock.db',query)
+        temp3 = temp3.set_index('symbol')
+
+        query = "select symbol, open as now, date from live where (symbol, date) in (select symbol, max(date) from live group by symbol) and symbol in (" + str(stocks_to_track)[1:-1] + ");"
+        temp4 = get_query('stock.db',query)
+        temp4 = temp4.set_index('symbol')
+
+        summary = summary.merge(temp1, how='left', left_index=True, right_index=True)
+        summary = summary.merge(temp2, how='left', left_index=True, right_index=True)
+        summary = summary.merge(temp3, how='left', left_index=True, right_index=True)
+        summary = summary.merge(temp4, how='left', left_index=True, right_index=True)
+
+        summary['weights']=''
+
+        for stock, weight in zip(my_portfolio,my_weights):
+            summary.at[stock, 'weights'] = weight
+
+        query = "select max(date) as date from live;"
+        date_updated = get_query('stock.db',query)
+        date_updated = str(date_updated.iloc[0,0])
+
+        #===========================================================
+
+        print('STOCK MONITOR','\t'*4,'Updated: ',date_updated)
+        print('-'*(13+13+16+9+len(date_updated)))
+
+        #(summary.loc[stock]['now']/summary.loc[stock]['opening'] -1)
+        
+#        print("\n" * 100)
+
+        print('My Portfolio\n')
+        for stock in my_portfolio:
+            if summary.loc[stock]['recommendation']=='BUY':
+                status = '\x1b[6;30;42m' + 'BUY ' + '\x1b[0m'
+            else:
+                status = '\x1b[6;37;41m' + summary.loc[stock]['recommendation'] + '\x1b[0m'
+
+            if (summary.loc[stock]['now']/summary.loc[stock]['opening'] -1)>=0:
+                increase = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['opening'] -1),1)) + "%"),'green')
+            else:
+                increase = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['opening'] -1),1)) + "%"),'red')
+
+            if (summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1)>=0:
+                increase_month = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1),1)) + "%"),'green')
+            else:
+                increase_month = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1),1)) + "%"),'red')
 
 
+            if (summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1)>=0:
+                increase_year = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1),1)) + "%"),'green')
+            else:
+                increase_year = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1),1)) + "%"),'red')
+            #print(stock,"\t Status:",status,'\t','Price:',round(float(summary.loc[stock]['now']),1)," ",  increase, '\t', increase_month, '\t', increase_year)
+            print("{:<8} {:<5} {:<10} {:<6} {:<8} {:<12} {:<12} {:<12}".format(stock,'Status:',status,'Price:',round(float(summary.loc[stock]['now']),1),increase,increase_month,increase_year))
 
 
+        print('-'*(13+13+16+9+len(date_updated)))
+        print('Other Stocks\n')
+
+        rest=set(stocks_to_track).difference(set(my_portfolio))
+
+        for stock in rest:
+            if summary.loc[stock]['recommendation']=='BUY':
+                status = '\x1b[6;30;42m' + 'BUY ' + '\x1b[0m'
+            else:
+                status = '\x1b[6;37;41m' + summary.loc[stock]['recommendation'] + '\x1b[0m'
+
+            if (summary.loc[stock]['now']/summary.loc[stock]['opening'] -1)>=0:
+                increase = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['opening'] -1),1)) + "%"),'green')
+            else:
+                increase = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['opening'] -1),1)) + "%"),'red')
+
+            if (summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1)>=0:
+                increase_month = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1),1)) + "%"),'green')
+            else:
+                increase_month = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1),1)) + "%"),'red')
+
+
+            if (summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1)>=0:
+                increase_year = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1),1)) + "%"),'green')
+            else:
+                increase_year = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1),1)) + "%"),'red')
+            #print(stock,"\t Status:",status,'\t','Price:',round(float(summary.loc[stock]['now']),1)," ",  increase, '\t', increase_month, '\t', increase_year)
+            print("{:<8} {:<5} {:<10} {:<6} {:<8} {:<12} {:<12} {:<12}".format(stock,'Status:',status,'Price:',round(float(summary.loc[stock]['now']),1),increase,increase_month,increase_year))
+        sleep(10)
+
+
+#clear = lambda: os.system('clear')
 
 
 
