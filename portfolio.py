@@ -59,7 +59,7 @@ def execute_query(db,queries):
     '''
     try:        
         conn = sqlite3.connect(db)
-        print("Connected to SQLITE Database stock.db")
+#        print("Connected to SQLITE Database stock.db")
     except:
         print("Error connecting to stock.db database.")
     for query in queries:
@@ -122,7 +122,7 @@ def history_to_sql():
     execute_query('stock.db',queries)
     pass
 
-def scrape(stocks,times,db='stock.db'):
+def scrape(stocks,times):
     '''
     Function that scrapes yahoo finance and downloads recommendation and price to local sql database.
     Inputs:
@@ -306,17 +306,21 @@ def montecarlo(stocks, start, end, riskFreeRate, n=50000, graph=True):
     return sharpe_portfolio, min_variance_port
 
 
-def monitor(stocks_to_track,my_portfolio,my_weights,n):
+def monitor(stocks_to_track,my_portfolio,my_weights,n,sleep_time=0.5):
     '''
     Function that monitors selected stocks in a simple dashboard.
     Inputs:
       my_portfolio: stocks that are part of portfolio
       my weights: weigts of portfolio. Sum has to be 1.
       n: times dashboard is going to be updated if time is activated at the end of the function.
+      sleep_time: time it waits to refresh screen after downloading each stock indicators
     Output:
       Console dashboard.
     '''
+    print("\n" * 100)
+
     for i in range(n):
+
         current_year = date.today().year
         query = "select date from history where date>= '" + str(current_year) + "-01-01' order by date limit 1;"
         first_day_year = get_query('stock.db',query)
@@ -355,10 +359,11 @@ def monitor(stocks_to_track,my_portfolio,my_weights,n):
         summary = summary.merge(temp3, how='left', left_index=True, right_index=True)
         summary = summary.merge(temp4, how='left', left_index=True, right_index=True)
 
-        summary['weights']=''
+        summary['weights'] = ''
 
         for stock, weight in zip(my_portfolio,my_weights):
             summary.at[stock, 'weights'] = weight
+        #    yearly_growth = 
 
         query = "select max(date) as date from live;"
         date_updated = get_query('stock.db',query)
@@ -370,34 +375,51 @@ def monitor(stocks_to_track,my_portfolio,my_weights,n):
         print('-'*(13+13+16+9+len(date_updated)))
 
 #        print("\n" * 100)
-        print('My Portfolio\n')
+        print('My Portfolio')
+        print('\t\t\t\t\t','d     ','m   ','ytd')
+#        data_to_print=''
+        a=0
+        i=0
         for stock in my_portfolio:
             if summary.loc[stock]['recommendation']=='BUY':
                 status = '\x1b[6;30;42m' + 'BUY ' + '\x1b[0m'
             else:
                 status = '\x1b[6;37;41m' + summary.loc[stock]['recommendation'] + '\x1b[0m'
 
+            a += ((summary.loc[stock]['now']/summary.loc[stock]['opening'] -1))*my_weights[i]
+            i+=1
+            
             if (summary.loc[stock]['now']/summary.loc[stock]['opening'] -1)>=0:
-                increase = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['opening'] -1),1)) + "%"),'green')
+                increase = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['opening'] -1),2)) + "%"),'green')
             else:
-                increase = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['opening'] -1),1)) + "%"),'red')
+                increase = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['opening'] -1),2)) + "%"),'red')
 
             if (summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1)>=0:
-                increase_month = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1),1)) + "%"),'green')
+                increase_month = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1),2)) + "%"),'green')
             else:
-                increase_month = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1),1)) + "%"),'red')
+                increase_month = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1),2)) + "%"),'red')
 
 
             if (summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1)>=0:
-                increase_year = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1),1)) + "%"),'green')
+                increase_year = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1),2)) + "%"),'green')
             else:
-                increase_year = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1),1)) + "%"),'red')
+                increase_year = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1),2)) + "%"),'red')
             #print(stock,"\t Status:",status,'\t','Price:',round(float(summary.loc[stock]['now']),1)," ",  increase, '\t', increase_month, '\t', increase_year)
-            print("{:<8} {:<5} {:<10} {:<6} {:<8} {:<12} {:<12} {:<12}".format(stock,'Status:',status,'Price:',round(float(summary.loc[stock]['now']),1),increase,increase_month,increase_year))
+            print("{:<8} {:<5} {:<10} {:<6} {:<8} {:<12} {:<12} {:<12}".format(stock,'Status:',status,'Price:',round(float(summary.loc[stock]['now']),2),increase,increase_month,increase_year))
 
+ #           data_to_print += "{:<8} {:<5} {:<10} {:<6} {:<8} {:<12} {:<12} {:<12}.format(" + stock + ", Status: ,"+ status + ", Price: ," + str(round(float(summary.loc[stock]['now']),1)) + "," + str(increase) + "," + str(increase_month) + "," + str(increase_year) + "\n"
+#        print(repr(data_to_print))
+        a=round((1+a)**250-1,3)
+        if a>0:
+            print("Today's Annualized Change:" + '\x1b[6;30;42m' + str(a) + "%" + '\x1b[0m')
+        else:
+            print("Today's Annualized Change:" + '\x1b[6;37;41m' + str(a) + "%" + '\x1b[0m')
+
+#        print("Today's Annualized Change:", a,"%")
 
         print('-'*(13+13+16+9+len(date_updated)))
         print('Other Stocks\n')
+
 
         rest=set(stocks_to_track).difference(set(my_portfolio))
 
@@ -408,23 +430,26 @@ def monitor(stocks_to_track,my_portfolio,my_weights,n):
                 status = '\x1b[6;37;41m' + summary.loc[stock]['recommendation'] + '\x1b[0m'
 
             if (summary.loc[stock]['now']/summary.loc[stock]['opening'] -1)>=0:
-                increase = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['opening'] -1),1)) + "%"),'green')
+                increase = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['opening'] -1),2)) + "%"),'green')
             else:
-                increase = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['opening'] -1),1)) + "%"),'red')
+                increase = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['opening'] -1),2)) + "%"),'red')
 
             if (summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1)>=0:
-                increase_month = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1),1)) + "%"),'green')
+                increase_month = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1),2)) + "%"),'green')
             else:
-                increase_month = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1),1)) + "%"),'red')
+                increase_month = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['month_ago'] -1),2)) + "%"),'red')
 
 
             if (summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1)>=0:
-                increase_year = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1),1)) + "%"),'green')
+                increase_year = colored((" " + str(round((summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1),2)) + "%"),'green')
             else:
-                increase_year = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1),1)) + "%"),'red')
+                increase_year = colored((" " + str(round(-(summary.loc[stock]['now']/summary.loc[stock]['start_of_year'] -1),2)) + "%"),'red')
             #print(stock,"\t Status:",status,'\t','Price:',round(float(summary.loc[stock]['now']),1)," ",  increase, '\t', increase_month, '\t', increase_year)
-            print("{:<8} {:<5} {:<10} {:<6} {:<8} {:<12} {:<12} {:<12}".format(stock,'Status:',status,'Price:',round(float(summary.loc[stock]['now']),1),increase,increase_month,increase_year))
-        sleep(5)
+            print("{:<8} {:<5} {:<10} {:<6} {:<8} {:<12} {:<12} {:<12}".format(stock,'Status:',status,'Price:',round(float(summary.loc[stock]['now']),2),increase,increase_month,increase_year))
+        print('\n')
+        scrape(stocks_to_track,1)
+
+        sleep(sleep_time)
 
 
 

@@ -15,39 +15,42 @@ monitor(stocks_to_track,my_portfolio,my_weights,n)
 
 #DOWNLOAD HISTORY==============================================================================================
 #db='stock.db'
-start = '2019-10-25'
-end = '2019-10-25'
+#start = '2019-10-25'
+#end = '2019-10-25'
 
-with open('symbols.csv','r') as f:
-    stocks = f.read().splitlines()
-    stocks = stocks[1:]
+#with open('symbols.csv','r') as f:
+#    stocks = f.read().splitlines()
+#    stocks = stocks[1:]
 
-portfolio.download_stocks(stocks, start, end)
-portfolio.delete_history_sql(stocks, '2019-10-25', '2019-10-28')
-portfolio.history_to_sql()
+#portfolio.download_stocks(stocks, start, end)
+#portfolio.delete_history_sql(stocks, '2019-10-25', '2019-10-28')
+#portfolio.history_to_sql()
 
 
 #DOWNLOAD HISTORY==============================================================================================
 
 
 riskFreeRate = 1.75/100 #10 year treasury bond
-
-
-#stocks = ['RSG','DUK','NEE','AEP','DTE']    #min volatility 2018-2019
-stocks = ['NEE','BLL','CMG','KEYS','ETR']  #max sharpe
-#stocks = ['AMD','CMG','KEYS','EW','TDG']   #max return
-#stocks = ['NEE','BLL','CMG','KEYS','TDG','TDG'] #most repeated ones
-#stocks = ['AMZN','MSFT','AAPL']  #EXAMPLE
-stocks = ['CHTR', 'ETR', 'MLM', 'CPRT', 'MAA']  #optimal
-
 start = '2019-01-01'
 end = '2019-10-30'
+stocks_to_track = ['NEE','BLL','CMG','KEYS','ETR','AMZN','AAPL','MSFT','TSLA','FORD']
+my_portfolio = ['NEE','BLL','CMG','KEYS','ETR']
+my_weights = [0.61,0.14,0.02,0.21,0.02]
 
-p_sharpe, min_variance_port = portfolio.montecarlo(stocks, start, end, riskFreeRate, 50000, True)
+#stocks = ['RSG','DUK','NEE','AEP','DTE']    #min volatility 2018-2019
+#stocks = ['NEE','BLL','CMG','KEYS','ETR']  #max sharpe
+#stocks = ['AMD','CMG','KEYS','EW','TDG']   #max return
+#stocks = ['NEE','BLL','CMG','KEYS','TDG','TDG'] #most repeated ones in top 5
+#stocks = ['AMZN','MSFT','AAPL']  #EXAMPLE
+
+#stocks = ['CHTR', 'ETR', 'MLM', 'CPRT', 'MAA']  #optimal
+
+
+
+#p_sharpe, min_variance_port = portfolio.montecarlo(stocks, start, end, riskFreeRate, 50000, True)
 #p_sharpe2, min_variance_port2 = portfolio.montecarlo(stocks, start, end, riskFreeRate, 50000, False)
 
 #GRAPH A SPECIFIC STOCK
-portfolio.graph(['AAPL'],5)
 
 #LOAD DATA
 #data = portfolio.process_stocks(stocks, start, end)
@@ -55,15 +58,16 @@ portfolio.graph(['AAPL'],5)
 #stocks = list(data.columns)
 
 #SCRAPE SELECTED STOCKS
-stocks_to_track = ['NEE','BLL','CMG','KEYS','ETR','AMZN','AAPL','MSFT']
+
+#portfolio.scrape(stocks_to_track,1)
+portfolio.monitor(stocks_to_track,my_portfolio,my_weights,100,1)
+portfolio.graph(['AAPL'],1000)
+
+start = '2019-01-01'
+end = '2019-10-30'
+riskFreeRate = 1.75/100 #10 year treasury bond
 my_portfolio = ['NEE','BLL','CMG','KEYS','ETR']
-my_weights = [0.61,0.14,0.02,0.21,0.02]
-
-portfolio.scrape(stocks_to_track,10,'stock.db')
-
-portfolio.monitor(stocks_to_track,my_portfolio,my_weights,15)
-
-
+p_sharpe, min_variance_port = portfolio.montecarlo(my_portfolio, start, end, riskFreeRate, 50000, True)
 
 
 #===========================================================================================================
