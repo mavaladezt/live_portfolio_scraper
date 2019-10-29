@@ -75,7 +75,7 @@ insert into live values ('2019-10-25 14:41:10',110.10,'RSG');
 insert into live values ('2019-10-25 14:41:10',111.11,'AMD');
 insert into live values ('2019-10-25 14:41:10',112.12,'NEE');
 
-DELETE FROM live WHERE date='2019-10-25 14:41:09' and symbol='MSFT';
+DELETE FROM live WHERE date < '2019-10-27 14:41:09';
 
 stocks_to_track = ['BLL','CMG','AEP','DTE','TDG','EW','DUK','KEYS','ETR','RSG','AMD','NEE']
 
