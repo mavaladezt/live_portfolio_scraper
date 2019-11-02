@@ -1,37 +1,15 @@
-<h2>NYC Yellow Taxi Estimator</h2>
-<p>This Shiny App is meant for estimating the profit of the NYC Yellow Taxis.</p>
-<p>For the model to be accurate, all variables need to be calibrated.</p>
+<h2>Portfolio Optimization and Scraper</h2>
+<p>The main idea of this project was to create a portfolio optimizer that maximizes sharpe ratio.</p>
+<p>Model can receive hundreds of portfolio volatilities and returns and will calculate the best combination.</p>
+<p>As a reference a optimization with 500 stocks with information of around 200 days (10 months of 2019) runs in less than 2 minutes in my computer.</p>
 <p>&nbsp;</p>
-<h3>Questions to Answer:</h3>
-
-
-<li>How much profit do the NYC yellow taxi industry generates</li>
-<li>Which is the most important cost? How sensible it is to increases?</li>
-<li>Which is the distribution of distances, fares and duration of the trips?</li>
-
-<p>&nbsp;</p>
-<h3>Data</h3>
-<p>Data was obtained from:&nbsp;<a href="https://www1.nyc.gov/site/tlc/about/tlc-trip-record-data.page">https://www1.nyc.gov/site/tlc/about/tlc-trip-record-data.page</a></p>
-<p>Working with 2019 data (Jan-Jun).</p>
-
-<li>Filtered transactions that had duration of more than 2 hrs.</li>
-<li>Filtered trips with 'zero' fare.</li>
-<li>Filtered transactions that were not paid by Credit Card or Cash.</li>
-<li>If driver didn't captured number of passengers I assumed there was only 1 passenger.</li>
-
-<h3>&nbsp;</h3>
-<h3>Model Assumptions</h3>
-<p>All the main variables are contained in the "Model" section and can be modified by the user in a simulation-like form.</p>
-
-<li>Profit is an estimation of Fare + Extra - costs. Tips in some cases can be included too as a total profit in the system but I decided not to include it for now.</li>
-<li>Estimated profit excludes tolls, MTA and improvement fees since the Taxi company transfers its to the State or City.</li>
-<li>There is a replacement of the net car cost (purchase price - estimated resale value) so that the Taxi company is able to renew cars.</li>
-<li>Cost of Medallion is not included since the basic assumption of the model is that the medallion price doesn't increase/decrease over time.</li>
+<h3>Main file to look for:</h3>
+<li>portfolio_optimization.py: this file has all you need to run it for yourself. It works with the symbols/quotes you want to download from Yahoo Finance. If you want to run it with assets not contained in yahoo finance (such as cash, funds, etc.) you will need to create a CSV file that information and process it along with the stocks you want to consider.</li>
+<li>portfolio.py: is the file I used for scraping yahoo finance to get some additional detail about some stocks I was tracking. In order to use it I suggest you load the whole file as a library and then call functions as required. You might need to create some local sql file to download the information.</li>
+<li>master.py: is an example of how I was calling different functions as required when I did my monitoring stocks presentation. It might not be particularly useful to you but you can see a little bit how to call some functions.</li>
 
 <p>&nbsp;</p>
 <h3>Takeaways</h3>
-<p>The main takeaways of the study can be found in the 'NYC Yellow Taxis Profitability.pdf' file.</p>
-
+<p>The main takeaways of the study can be found in the following blog.</p>
+<p><a href="https://nycdatascience.com/blog/alumni/portfolio-selection-and-optimization/">https://nycdatascience.com/blog/alumni/portfolio-selection-and-optimization/</a></p>
 <p>&nbsp;</p>
-<h3>Shinny App Link</h3>
-https://mavaladezt.shinyapps.io/taxis/
